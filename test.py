@@ -1,4 +1,3 @@
-
 from paddleocr import PaddleOCR
 import re
 import cv2
@@ -20,6 +19,54 @@ plate_pattern = re.compile("|".join(plate_patterns))
 def is_valid_license_plate(text):
     """检查文本是否符合车牌格式"""
     return plate_pattern.match(text) is not None
+
+
+def detect_plate_color(plate_image):
+    """
+    识别车牌颜色
+    :param plate_image: 车牌图片
+    :return: 返回车牌颜色（蓝牌、绿牌、黄牌、白牌）
+    """
+    # 将车牌图片转换为 HSV 颜色空间
+    hsv_image = cv2.cvtColor(plate_image, cv2.COLOR_BGR2HSV)
+
+    # 定义颜色范围
+    blue_lower = np.array([100, 50, 50])  # 蓝色范围
+    blue_upper = np.array([130, 255, 255])
+
+    green_lower = np.array([35, 50, 50])  # 绿色范围
+    green_upper = np.array([85, 255, 255])
+
+    yellow_lower = np.array([20, 50, 50])  # 黄色范围
+    yellow_upper = np.array([35, 255, 255])
+
+    white_lower = np.array([0, 0, 200])  # 白色范围
+    white_upper = np.array([180, 30, 255])
+
+    # 创建颜色掩码
+    blue_mask = cv2.inRange(hsv_image, blue_lower, blue_upper)
+    green_mask = cv2.inRange(hsv_image, green_lower, green_upper)
+    yellow_mask = cv2.inRange(hsv_image, yellow_lower, yellow_upper)
+    white_mask = cv2.inRange(hsv_image, white_lower, white_upper)
+
+    # 计算各颜色的像素数量
+    blue_pixels = cv2.countNonZero(blue_mask)
+    green_pixels = cv2.countNonZero(green_mask)
+    yellow_pixels = cv2.countNonZero(yellow_mask)
+    white_pixels = cv2.countNonZero(white_mask)
+
+    # 判断车牌颜色
+    max_pixels = max(blue_pixels, green_pixels, yellow_pixels, white_pixels)
+    if max_pixels == blue_pixels:
+        return "蓝牌"
+    elif max_pixels == green_pixels:
+        return "绿牌"
+    elif max_pixels == yellow_pixels:
+        return "黄牌"
+    elif max_pixels == white_pixels:
+        return "白牌"
+    else:
+        return "未知"
 
 
 def locate_license_plate(image_path):
@@ -73,9 +120,19 @@ def recognize_license_plate(image_path):
         # 截取车牌区域
         plate_image = image[y_min:y_max, x_min:x_max]
 
+        # 识别车牌颜色
+        plate_color = detect_plate_color(plate_image)
+
         # 显示车牌区域
-        cv2.imshow(f"License Plate {i + 1}", plate_image)
+        cv2.imshow(f"License Plate {i + 1} ({plate_color})", plate_image)
         cv2.waitKey(0)  # 等待用户按下任意键关闭窗口
+
+        # 输出车牌信息
+        print(f"车牌 {i + 1}:")
+        print(f"  颜色: {plate_color}")
+        print(f"  文本: {result['text']}")
+        print(f"  置信度: {result['confidence']:.2f}")
+        print(f"  位置坐标: {result['coords']}")
 
     cv2.destroyAllWindows()  # 关闭所有 OpenCV 窗口
 
@@ -88,5 +145,3 @@ if __name__ == "__main__":
 
     # 识别车牌并显示锁定后的车牌照片
     results = recognize_license_plate(image_path)
-    for result in results:
-        print(f"车牌: {result['text']}, 置信度: {result['confidence']:.2f}, 位置: {result['coords']}")
