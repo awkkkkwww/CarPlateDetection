@@ -25,7 +25,7 @@ def detect_plate_color(plate_image):
     """
     识别车牌颜色
     :param plate_image: 车牌图片
-    :return: 返回车牌颜色（蓝牌、绿牌、黄牌、白牌）
+    :return: 返回车牌颜色（蓝牌、绿牌、黄牌、白牌、黑牌）
     """
     # 将车牌图片转换为 HSV 颜色空间
     hsv_image = cv2.cvtColor(plate_image, cv2.COLOR_BGR2HSV)
@@ -43,20 +43,25 @@ def detect_plate_color(plate_image):
     white_lower = np.array([0, 0, 200])  # 白色范围
     white_upper = np.array([180, 30, 255])
 
+    black_lower = np.array([0, 0, 0])  # 黑色范围
+    black_upper = np.array([180, 255, 100])
+
     # 创建颜色掩码
     blue_mask = cv2.inRange(hsv_image, blue_lower, blue_upper)
     green_mask = cv2.inRange(hsv_image, green_lower, green_upper)
     yellow_mask = cv2.inRange(hsv_image, yellow_lower, yellow_upper)
     white_mask = cv2.inRange(hsv_image, white_lower, white_upper)
+    black_mask = cv2.inRange(hsv_image, black_lower, black_upper)
 
     # 计算各颜色的像素数量
     blue_pixels = cv2.countNonZero(blue_mask)
     green_pixels = cv2.countNonZero(green_mask)
     yellow_pixels = cv2.countNonZero(yellow_mask)
     white_pixels = cv2.countNonZero(white_mask)
+    black_pixels = cv2.countNonZero(black_mask)
 
     # 判断车牌颜色
-    max_pixels = max(blue_pixels, green_pixels, yellow_pixels, white_pixels)
+    max_pixels = max(blue_pixels, green_pixels, yellow_pixels, white_pixels, black_pixels)
     if max_pixels == blue_pixels:
         return "蓝牌"
     elif max_pixels == green_pixels:
@@ -65,6 +70,8 @@ def detect_plate_color(plate_image):
         return "黄牌"
     elif max_pixels == white_pixels:
         return "白牌"
+    elif max_pixels == black_pixels:
+        return "黑牌"
     else:
         return "未知"
 
@@ -141,7 +148,7 @@ def recognize_license_plate(image_path):
 
 # 测试代码
 if __name__ == "__main__":
-    image_path = r"D:\python_leanling_code\TXCL_end\ph\1.jpg"  # 替换为你的图片路径
+    image_path = r"D:\python_leanling_code\TXCL_end\ph\11.jpg"  # 替换为你的图片路径
 
     # 识别车牌并显示锁定后的车牌照片
     results = recognize_license_plate(image_path)
