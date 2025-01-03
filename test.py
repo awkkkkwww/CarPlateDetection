@@ -1,7 +1,10 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 from paddleocr import PaddleOCR
 import re
 import cv2
 import numpy as np
+from PIL import Image, ImageTk
 
 # 初始化 OCR
 ocr = PaddleOCR(use_angle_cls=True, lang='ch')
@@ -103,7 +106,7 @@ def locate_license_plate(image_path):
 
 def recognize_license_plate(image_path):
     """
-    识别车牌并显示锁定后的车牌照片
+    识别车牌并返回结果
     :param image_path: 输入图片路径
     :return: 返回识别到的车牌信息列表
     """
@@ -115,8 +118,9 @@ def recognize_license_plate(image_path):
     if image is None:
         raise ValueError("无法读取图片，请检查路径是否正确。")
 
-    # 显示每个车牌区域
-    for i, result in enumerate(results):
+    # 处理每个车牌区域
+    plate_results = []
+    for result in results:
         coords = result["coords"]
         # 获取车牌区域的边界框
         x_min = min(point[0] for point in coords)
@@ -130,25 +134,90 @@ def recognize_license_plate(image_path):
         # 识别车牌颜色
         plate_color = detect_plate_color(plate_image)
 
-        # 显示车牌区域
-        cv2.imshow(f"License Plate {i + 1} ({plate_color})", plate_image)
-        cv2.waitKey(0)  # 等待用户按下任意键关闭窗口
+        # 将车牌图片转换为 PIL 格式
+        plate_image_pil = Image.fromarray(cv2.cvtColor(plate_image, cv2.COLOR_BGR2RGB))
 
-        # 输出车牌信息
-        print(f"车牌 {i + 1}:")
-        print(f"  颜色: {plate_color}")
-        print(f"  文本: {result['text']}")
-        print(f"  置信度: {result['confidence']:.2f}")
-        print(f"  位置坐标: {result['coords']}")
+        # 存储结果
+        plate_results.append({
+            "image": plate_image_pil,
+            "color": plate_color,
+            "text": result["text"],
+            "confidence": result["confidence"],
+            "coords": result["coords"]
+        })
 
-    cv2.destroyAllWindows()  # 关闭所有 OpenCV 窗口
-
-    return results
+    return plate_results, image
 
 
-# 测试代码
+class LicensePlateApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("车牌识别系统")
+
+        # 创建 GUI 组件
+        self.label = tk.Label(root, text="车牌识别系统", font=("Arial", 16))
+        self.label.pack(pady=10)
+
+        self.select_button = tk.Button(root, text="选择图片", command=self.select_image)
+        self.select_button.pack(pady=10)
+
+        # 原图片显示区域
+        self.original_image_label = tk.Label(root)
+        self.original_image_label.pack(pady=10)
+
+        # 结果显示区域
+        self.result_frame = tk.Frame(root)
+        self.result_frame.pack(pady=10)
+
+    def select_image(self):
+        """选择图片并显示识别结果"""
+        # 打开文件选择对话框
+        file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg;*.png;*.jpeg")])
+        if not file_path:
+            return
+
+        # 清空之前的结果
+        for widget in self.result_frame.winfo_children():
+            widget.destroy()
+
+        # 识别车牌
+        try:
+            plate_results, original_image = recognize_license_plate(file_path)
+            if not plate_results:
+                messagebox.showinfo("提示", "未检测到车牌")
+                return
+
+            # 显示原图片
+            original_image_pil = Image.fromarray(cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
+            original_image_pil = original_image_pil.resize((400, 300), Image.ANTIALIAS)
+            original_image_tk = ImageTk.PhotoImage(original_image_pil)
+            self.original_image_label.config(image=original_image_tk)
+            self.original_image_label.image = original_image_tk  # 保持引用，避免被垃圾回收
+
+            # 显示每个车牌的结果
+            for i, result in enumerate(plate_results):
+                # 显示车牌图片
+                plate_image = result["image"].resize((200, 100), Image.ANTIALIAS)
+                plate_image_tk = ImageTk.PhotoImage(plate_image)
+                image_label = tk.Label(self.result_frame, image=plate_image_tk)
+                image_label.image = plate_image_tk  # 保持引用，避免被垃圾回收
+                image_label.grid(row=i, column=0, padx=10, pady=10)
+
+                # 显示车牌信息
+                info_text = (f"车牌 {i + 1}:\n"
+                             f"  车牌颜色: {result['color']}\n"
+                             f"  车牌号码: {result['text']}\n"
+                             f"  置信度: {result['confidence']:.2f}\n"
+                             f"  位置坐标: {result['coords']}")
+                info_label = tk.Label(self.result_frame, text=info_text, justify=tk.LEFT)
+                info_label.grid(row=i, column=1, padx=10, pady=10)
+
+        except Exception as e:
+            messagebox.showerror("错误", f"发生错误: {e}")
+
+
+# 运行 GUI 程序
 if __name__ == "__main__":
-    image_path = r"D:\python_leanling_code\TXCL_end\ph\11.jpg"  # 替换为你的图片路径
-
-    # 识别车牌并显示锁定后的车牌照片
-    results = recognize_license_plate(image_path)
+    root = tk.Tk()
+    app = LicensePlateApp(root)
+    root.mainloop()
