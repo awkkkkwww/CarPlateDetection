@@ -145,6 +145,25 @@ def recognize_license_plate(image_path):
 
     return results
 
+class LicensePlateApp:
+    def __init__(self, root):#GUI显示区域
+        self.root = root
+        self.root.title("车牌识别系统")
+
+        # 创建 GUI 组件
+        self.label = tk.Label(root, text="车牌识别系统", font=("Arial", 16))
+        self.label.pack(pady=10)
+
+        self.select_button = tk.Button(root, text="选择图片", command=self.select_image)
+        self.select_button.pack(pady=10)
+
+        # 原图片显示区域
+        self.original_image_label = tk.Label(root)
+        self.original_image_label.pack(pady=10)
+
+        # 结果显示区域
+        self.result_frame = tk.Frame(root)
+        self.result_frame.pack(pady=10)
 
 # 测试代码
 if __name__ == "__main__":
