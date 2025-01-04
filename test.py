@@ -6,12 +6,12 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-# 初始化 OCR
+# 初始化 OCR 引擎
 ocr = PaddleOCR(use_angle_cls=True, lang='ch')
 
-# 车牌正则表达式
+# 车牌正则表达式，用于匹配车牌格式
 plate_patterns = [
-    r"^[\u4e00-\u9fff][A-Z]·[A-Z0-9]{5}$",  # 中国车牌
+    r"^[\u4e00-\u9fff][A-Z]·[A-Z0-9]{5}$",  # 标准中国车牌
     r"^[A-Z]{1,3}[0-9]{1,4}[A-Z0-9]{0,3}$",  # 国际车牌
     r"^粤Z·[A-Z0-9]{4}[港澳]$",  # 粤Z车牌
     r"^[\u4e00-\u9fff][A-Z]·[DF][A-Z0-9]{5}$"  # 新能源车牌
@@ -27,7 +27,7 @@ def is_valid_license_plate(text):
 def detect_plate_color(plate_image):
     """
     识别车牌颜色
-    :param plate_image: 车牌图片
+    :param plate_image: 车牌图片（BGR 格式）
     :return: 返回车牌颜色（蓝牌、绿牌、黄牌、白牌、黑牌）
     """
     # 将车牌图片转换为 HSV 颜色空间
@@ -110,13 +110,13 @@ def recognize_license_plate(image_path):
     :param image_path: 输入图片路径
     :return: 返回识别到的车牌信息列表
     """
-    # 定位车牌
-    results = locate_license_plate(image_path)
-
-    # 读取原始图片
-    image = cv2.imread(image_path)
+    # 读取图片（支持中文路径）
+    image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError("无法读取图片，请检查路径是否正确。")
+
+    # 定位车牌
+    results = locate_license_plate(image_path)
 
     # 处理每个车牌区域
     plate_results = []
@@ -148,45 +148,77 @@ def recognize_license_plate(image_path):
 
     return plate_results, image
 
-class LicensePlateApp:
-    def __init__(self, root):#GUI显示区域
-        self.root = root
-        self.root.title("车牌识别系统")
-
-        # 创建 GUI 组件
-        self.label = tk.Label(root, text="车牌识别系统", font=("Arial", 16))
-        self.label.pack(pady=10)
-
-        self.select_button = tk.Button(root, text="选择图片", command=self.select_image)
-        self.select_button.pack(pady=10)
-
-        # 原图片显示区域
-        self.original_image_label = tk.Label(root)
-        self.original_image_label.pack(pady=10)
-
-        # 结果显示区域
-        self.result_frame = tk.Frame(root)
-        self.result_frame.pack(pady=10)
 
 class LicensePlateApp:
     def __init__(self, root):
         self.root = root
         self.root.title("车牌识别系统")
+        self.root.geometry("1000x800")  # 设置固定窗口大小
+
+        # 设置窗口背景颜色
+        self.root.configure(bg="#f0f0f0")
+
+        # 让窗口居中显示
+        self.center_window()
 
         # 创建 GUI 组件
-        self.label = tk.Label(root, text="车牌识别系统", font=("Arial", 16))
+        self.label = tk.Label(root, text="车牌识别系统", font=("Arial", 16), bg="#f0f0f0")
         self.label.pack(pady=10)
 
-        self.select_button = tk.Button(root, text="选择图片", command=self.select_image)
+        self.select_button = tk.Button(root, text="选择图片", command=self.select_image, bg="#e0e0e0")
         self.select_button.pack(pady=10)
 
+        self.exit_button = tk.Button(root, text="退出", command=self.root.quit, bg="#e0e0e0")
+        self.exit_button.pack(pady=10)
+
         # 原图片显示区域
-        self.original_image_label = tk.Label(root)
+        self.original_image_label = tk.Label(root, bg="#f0f0f0")
         self.original_image_label.pack(pady=10)
 
-        # 结果显示区域
-        self.result_frame = tk.Frame(root)
-        self.result_frame.pack(pady=10)
+        # 添加水平分隔线
+        self.separator = tk.Frame(root, height=2, bd=1, relief=tk.SUNKEN, bg="#a0a0a0")
+        self.separator.pack(fill=tk.X, padx=10, pady=10)
+
+        # 添加结果区域的中文标签
+        self.result_label = tk.Label(root, text="识别结果（共 0 个）", font=("Arial", 12), bg="#f0f0f0")
+        self.result_label.pack(pady=5)  # 调小高度
+
+        # 创建 Canvas 和 Scrollbar
+        self.canvas = tk.Canvas(root, bg="#ffffff", bd=2, relief=tk.GROOVE)
+        self.scrollable_frame = tk.Frame(self.canvas, bg="#ffffff")
+
+        # 绑定滚动区域
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        # 将 Scrollable Frame 添加到 Canvas
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # 绑定鼠标滚轮事件
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        # 放置 Canvas
+        self.canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
+    def center_window(self):
+        """将窗口居中显示"""
+        screen_width = self.root.winfo_screenwidth()  # 获取屏幕宽度
+        screen_height = self.root.winfo_screenheight()  # 获取屏幕高度
+        window_width = 1000  # 窗口宽度
+        window_height = 800  # 窗口高度
+
+        # 计算窗口左上角的坐标
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+
+        # 设置窗口位置
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+    def _on_mousewheel(self, event):
+        """鼠标滚轮滚动事件"""
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def select_image(self):
         """选择图片并显示识别结果"""
@@ -196,7 +228,7 @@ class LicensePlateApp:
             return
 
         # 清空之前的结果
-        for widget in self.result_frame.winfo_children():
+        for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
         # 识别车牌
@@ -204,11 +236,15 @@ class LicensePlateApp:
             plate_results, original_image = recognize_license_plate(file_path)
             if not plate_results:
                 messagebox.showinfo("提示", "未检测到车牌")
+                self.result_label.config(text="识别结果（共 0 个）")  # 更新识别数量
                 return
+
+            # 更新识别数量
+            self.result_label.config(text=f"识别结果（共 {len(plate_results)} 个）")
 
             # 显示原图片
             original_image_pil = Image.fromarray(cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
-            original_image_pil = original_image_pil.resize((400, 300), Image.ANTIALIAS)
+            original_image_pil = original_image_pil.resize((500, 400), Image.ANTIALIAS)
             original_image_tk = ImageTk.PhotoImage(original_image_pil)
             self.original_image_label.config(image=original_image_tk)
             self.original_image_label.image = original_image_tk  # 保持引用，避免被垃圾回收
@@ -216,9 +252,9 @@ class LicensePlateApp:
             # 显示每个车牌的结果
             for i, result in enumerate(plate_results):
                 # 显示车牌图片
-                plate_image = result["image"].resize((200, 100), Image.ANTIALIAS)
+                plate_image = result["image"].resize((150, 75), Image.ANTIALIAS)  # 缩小车牌图片
                 plate_image_tk = ImageTk.PhotoImage(plate_image)
-                image_label = tk.Label(self.result_frame, image=plate_image_tk)
+                image_label = tk.Label(self.scrollable_frame, image=plate_image_tk, bg="#ffffff")
                 image_label.image = plate_image_tk  # 保持引用，避免被垃圾回收
                 image_label.grid(row=i, column=0, padx=10, pady=10)
 
@@ -228,7 +264,7 @@ class LicensePlateApp:
                              f"  车牌号码: {result['text']}\n"
                              f"  置信度: {result['confidence']:.2f}\n"
                              f"  位置坐标: {result['coords']}")
-                info_label = tk.Label(self.result_frame, text=info_text, justify=tk.LEFT)
+                info_label = tk.Label(self.scrollable_frame, text=info_text, justify=tk.LEFT, bg="#ffffff")
                 info_label.grid(row=i, column=1, padx=10, pady=10)
 
         except Exception as e:
